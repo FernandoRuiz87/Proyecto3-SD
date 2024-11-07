@@ -1,0 +1,10 @@
+# Colores para la consola
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+BLUE = "\033[34m"
+PURPLE = "\033[35m"
+PINK = "\033[38;5;213m"
+RESET = "\033[0m"
+GRAY = "\033[1;30m"
+CYAN = "\033[36m"
