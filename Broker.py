@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 from helpers.Colores import *
 import helpers.env as env
 import cv2 
@@ -19,7 +20,6 @@ class Broker:
         try:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server.bind((self.host, self.port))
-            self.address = self.server.getsockname()
             self.server.listen()
             print(f"{REVERSE}Servidor iniciado en ({self.host}:{self.port}){RESET}\n")
             print(f"{CYAN}{BOLD}LOG DEL SERVIDOR{RESET}\n---------------------------------------{RESET}")
@@ -29,6 +29,7 @@ class Broker:
     def aceptar_conexiones(self):
         while True:
             conexion, address = self.server.accept()
+            self.address = address
             threading.Thread(target=self.manejador, args=(conexion, address)).start()
     
     def manejador(self, conexion, address):
@@ -50,16 +51,17 @@ class Broker:
                 
                 # Si el mensaje de identificacion es de un nodo
                 if data == "[NODO]": 
-                    self.nodos.append(conexion) # Agregar nodo a la lista de nodos
-                    print(f"{BLUE}[CONEXIÓN_NODO] {YELLOW}{address}{RESET} ~~~ {BLUE}[HORA_CONEXIÓN] {YELLOW}{hora_conexion}{RESET}")
-                    conexion.send("[CONECTADO CON EXITO]".encode()) # Enviar mensaje de confirmación
                     tipo_conexion = "NODO"
+                    self.nodos.append(conexion) # Agregar nodo a la lista de nodos
+                    print(f"{BOLD}{BLUE}[{hora_conexion}] [CONEXIÓN_NODO]{RESET} - {CYAN}[DIRECCION : {address}]{RESET}")
+                    conexion.send(b"[CONECTADO CON EXITO]") # Enviar mensaje de confirmación
+                    print(f"{BG_GREEN}CANTIDAD DE NODOS CONECTADOS = {len(self.nodos)}{RESET}")
                 
                 # Si el mensaje de identificacion es de un cliente
                 if data == "[CLIENTE]": 
                     tipo_conexion = "CLIENTE"
                     self.cliente = conexion
-                    print(f"{BOLD}{GREEN}[{hora_conexion}] {GREEN}[CONEXIÓN_CLIENTE]{RESET} - {CYAN}[DIRECCION : {address}]{RESET}")
+                    print(f"{BOLD}{GREEN}[{hora_conexion}] [CONEXIÓN_CLIENTE]{RESET} - {CYAN}[DIRECCION : {address}]{RESET}")
                     conexion.send("[CONECTADO CON EXITO]".encode())
                 
                 # Si el mensaje de identificacion es de un video# Si el mensaje de identificacion es de un video
@@ -67,18 +69,23 @@ class Broker:
                     video_id = str(uuid.uuid4()) # Generar identificador único para el video
                     tamaño_video = conexion.recv(1024).decode()
                     video_path =  self.recibir_video(conexion, int(tamaño_video),video_id)
-                    # cantidad_nodos = len(self.nodos)
-                    cantidad_nodos = 3 # Cantidad de nodos a los que se enviará el video fuerza bruta
+                    cantidad_nodos = len(self.nodos) # Cantidad de nodos a los que se enviará el video
                     
+                    # Si se recibió el video correctamente y hay nodos disponibles
                     if video_path and cantidad_nodos > 0:
-                        print("xsadsa")
                         self.dividir_video(video_path,cantidad_nodos,video_id)
                         
-                        # # Enviar video a un nodo
-                        # for nodo in self.nodos:
-                            # nodo.send(f"[VIDEO]{video_id}".encode())
-                            # print(f"{BOLD}{LIGHT_PURPLE}[{hora_conexion}] [ENVIANDO_VIDEO]{RESET} - {CYAN}[NODO : {nodo.getpeername()}]{RESET}")
-    
+                        segmento = 1 # Inicializar segmento
+                        
+                        for nodo in self.nodos:
+                            nodo.send(b"[VIDEO]") # Enviar mensaje de identificación
+                            print(video_id)
+                            nodo.sendall(video_id.encode())
+                            fragmento_path = f"Broker_files/{video_id}/SinProcesar/segmento_{segmento}.mp4"
+                            print(fragmento_path)
+                            threading.Thread(target=self.enviar_video_a_nodo, args=(fragmento_path, nodo,segmento)).start()
+                            segmento += 1
+                            
             except Exception as e:
                 hora_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"{BOLD}{RED}[{hora_error}] [DESCONEXION_{tipo_conexion}]{RESET} - {CYAN}[DIRECCION : {address}]{RESET}\n{e}")
@@ -125,7 +132,6 @@ class Broker:
             return False
     
     def dividir_video(self, video, cantidad_nodos, identificador):
-        print("")
         output_dir = f"Broker_files/{identificador}/SinProcesar"  # Directorio de salida
         os.makedirs(output_dir, exist_ok=True)  # Crear el directorio de salida si no existe
         cap = cv2.VideoCapture(video)  # Cargar video con OpenCV
@@ -183,7 +189,37 @@ class Broker:
         # Liberar recursos
         cap.release()
         print("División del video completada.")
-        
+    
+    def enviar_video_a_nodo(self,fragmento_path, nodo , n_segmento ): # Enviar video a cada nodo
+            try:
+                # Obtener metadata del video
+                tamaño_video = os.path.getsize(fragmento_path) # Obtener tamaño del video
+
+                # Enviar metadata del video
+                nodo.send(str(tamaño_video).encode())
+                nodo.send(str(n_segmento).encode())
+
+                # Enviar video al nodo
+                with open(fragmento_path, "rb") as video:
+                    contador = 0
+
+                    start_time = time.time() # Iniciar temporizador
+                    
+                    while contador <= int(tamaño_video):
+                        datos = video.read(1024)
+                        if not datos:
+                            break
+                        nodo.sendall(datos) # Enviar datos al broker
+                        contador += len(datos) # Actualizar contador
+                    end_time = time.time() # Finalizar temporizador
+                    
+
+                nodo.send(b"[FIN]") # Enviar mensaje de finalización
+
+                # Mostrar mensaje de confirmación
+                print(f"Transferencia completa - Tiempo de envío: {round((end_time - start_time),3)} segundos")
+            except Exception as e:
+                print(f"Error al enviar el video: {e}")
 if __name__ == "__main__":
     os.system("cls") # Limpiar consola
     
