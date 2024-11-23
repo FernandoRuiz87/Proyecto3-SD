@@ -6,7 +6,6 @@ import threading
 import socket
 import os
 import uuid
-import test
 import numpy as np
 
 class Nodo:
