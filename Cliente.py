@@ -1,5 +1,6 @@
 import os
 import socket
+import threading
 import time
 from ctypes import windll
 
@@ -25,15 +26,22 @@ class Cliente:
                 b"[CLIENTE]"
             )  # Enviar mensaje para identificar a un cliente en el broker
         except Exception as e:
-            print(f"Error al conectar con el broker: {e}")
+            messagebox.showerror("Error", f"No se pudo conectar al broker: {e}")
+            os._exit(1)
 
     def enviar_video(self, ruta_video):  # Enviar video al broker
         try:
             # Obtener metadata del video
             tamaño_video = os.path.getsize(ruta_video)  # Obtener tamaño del video
-
+            
             # Enviar metadata del video
             self.conexion.send(b"[VIDEO]")
+            data = self.conexion.recv(1024).decode()
+
+            if data == "[SIN-NODOS]":
+                messagebox.showerror("Error", "No hay nodos disponibles para procesar el video")
+                return # Si no hay nodos disponibles, salir de la función
+            
             self.conexion.send(str(tamaño_video).encode())
 
             # Enviar video al broker
@@ -54,23 +62,22 @@ class Cliente:
             self.conexion.send(b"[FIN]")  # Enviar mensaje de finalización
 
             # Mostrar mensaje de confirmación
-            print(
-                f"Transferencia completa - Tiempo de envío: {round((end_time - start_time),3)} segundos"
-            )
+            messagebox.showinfo("Envío", f"Transferencia completa - Tiempo de envío: {round((end_time - start_time),3)} segundos")
         except Exception as e:
-            print(f"Error al enviar el video: {e}")
+            messagebox.showerror("Error", f"No se pudo enviar el video: {e}")
 
 
 class GUI:
-    def __init__(self):  # Constructor
+    def __init__(self, cliente):  # Modificar constructor para aceptar cliente
+        self.cliente = cliente
         self.app = None # Ventana principal
         self.btn_enviar = None # Botón de enviar
         self.lbl_informacion = None # Etiqueta de información
         self.cuadro_drop = None # Cuadro de arrastrar y soltar
+        self.ruta_video = None  # Almacenar la ruta del video
 
     def ventana(self):
         self.configuracion_ventana() 
-        self.centrar_ventana()
         
         # Crear etiquetas de bienvenida
         tk.Label(
@@ -169,7 +176,7 @@ class GUI:
         
         self.btn_enviar = tk.Button(
             frame_boton,
-            state= tk.DISABLED,
+            state=tk.DISABLED,
             text="Enviar",
             font=("Inter Medium", 15),
             bg="#828282",
@@ -178,13 +185,24 @@ class GUI:
             activeforeground="#FFFFFF",
             fg="#FFFFFF",
             width=55,
-            relief="flat"
+            relief="flat",
+            command=self.enviar_video  # Asignar comando al botón
         )
         self.btn_enviar.place(x=35, y=0)
         
         self.app.mainloop()  # Iniciar ventanas
 
+    # Configurar ventana principal
     def configuracion_ventana(self):
+        # Funcion privada para centrar la ventana
+        def centrar_ventana():
+            self.app.update_idletasks()  # Actualizar ventana
+            width = self.app.winfo_width()  # Obtener ancho de la ventana
+            height = self.app.winfo_height()  # Obtener alto de la ventana
+            x = (self.app.winfo_screenwidth() // 2) - (width // 2)
+            y = (self.app.winfo_screenheight() // 2) - (height // 2)
+            self.app.geometry(f"{width}x{height}+{x}+{y}")  # Centrar ventana
+            
         self.app = TkinterDnD.Tk()
         self.app.title("Editor de Videos")
         self.app.geometry("800x600")
@@ -205,14 +223,8 @@ class GUI:
         self.app.rowconfigure(2, weight=1)
         self.app.rowconfigure(3, weight=6)
         self.app.rowconfigure(4, weight=5)
-
-    def centrar_ventana(self):
-        self.app.update_idletasks()  # Actualizar ventana
-        width = self.app.winfo_width()  # Obtener ancho de la ventana
-        height = self.app.winfo_height()  # Obtener alto de la ventana
-        x = (self.app.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.app.winfo_screenheight() // 2) - (height // 2)
-        self.app.geometry(f"{width}x{height}+{x}+{y}")  # Centrar ventana
+        
+        centrar_ventana()  # Centrar ventana
 
     def _cuadro_archivos(self,x1, y1, x2, y2, r=25, **kwargs):
         points = (x1+r, y1, x1+r, y1, x2-r, y1, x2-r, y1, x2, y1, x2, y1+r, x2, y1+r, x2, y2-r, x2, y2-r, x2, y2, x2-r, y2, x2-r, y2, x1+r, y2, x1+r, y2, x1, y2, x1, y2-r, x1, y2-r, x1, y1+r, x1, y1+r, x1, y1)
@@ -232,6 +244,7 @@ class GUI:
                 return
             
             self.lbl_informacion.config(text=f"Archivo seleccionado: {file_path.split('/')[-1]}",fg="#000000")
+            self.ruta_video = file_path  # Guardar la ruta del video
             self.btn_enviar.config(state="normal",bg="#2196F3") # Habilitar botón de enviar
     
     def open_file_dialog(self):
@@ -242,22 +255,23 @@ class GUI:
         
         if file_path:
             self.lbl_informacion.config(text=f"Archivo seleccionado: {file_path.split('/')[-1]}",fg="#000000")
+            self.ruta_video = file_path  # Guardar la ruta del video
             self.btn_enviar.config(state="normal",bg="#2196F3") # Habilitar botón de enviar
+
+    def enviar_video(self):
+        if self.ruta_video:
+            threading.Thread(target=self.cliente.enviar_video, args=(self.ruta_video,), daemon=True).start()
 
 if __name__ == "__main__":
     os.system("cls")  # Limpiar consola
     
-    # Mostar GUI
-    app = GUI()
+    # Crear instancia de Cliente
+    cliente = Cliente(env.BROKER_HOST, env.BROKER_PORT)
+    
+    # Iniciar conexión en un hilo separado
+    hilo_conexion = threading.Thread(target=cliente.conectar_a_broker, daemon=True)
+    hilo_conexion.start()
+    
+    # Mostrar GUI pasando la instancia de cliente
+    app = GUI(cliente)
     app.ventana()
-    
-    
-
-    # Cliente = Cliente(env.BROKER_HOST, env.BROKER_PORT) # Crear instancia de Cliente
-    # Cliente.conectar_a_broker() # Conectar a broker
-
-    # input("Presiona Enter para enviar video...") # Esperar a que el usuario presione Enter
-
-    # Cliente.enviar_video("video.mp4") # Enviar video
-
-    # input("Presiona Enter para cerrar la conexión...") # Esperar a que el usuario presione Enter
