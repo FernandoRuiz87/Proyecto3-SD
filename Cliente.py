@@ -81,42 +81,39 @@ class Cliente:
                     break
                 
                 if data == "[UNIR_VIDEO]":
-                    
                     self.conexion.send(b"[UNIR_VIDEO]")  # Confirmar recepción
-                
-                # if data == "[VIDEO-PROCESADO]":
-                #     # Recibir video procesado
-                #     self.conexion.send(b"[OK]")  # Confirmar recepción
-                #     tamaño_video = self.conexion.recv(1024).decode()
-                #     tamaño_video = int(tamaño_video)
                     
-                #     # Crear archivo de video
-                #     with open("video_procesado.mp4", "wb") as video:
-                #         contador = 0
-                        
-                #         while contador <= tamaño_video:
-                #             datos = self.conexion.recv(1024)
-                #             if not datos:
-                #                 break
-                #             video.write(datos)
-                #             contador += len(datos)
-                    
-                #     # Mostrar mensaje de confirmación
-                #     messagebox.showinfo("Procesamiento", "Video procesado con éxito")
-                    
-                #     # Reproducir video
-                #     video = cv2.VideoCapture("video_procesado.mp4")
-                #     while video.isOpened():
-                #         ret, frame = video.read()
-                #         if not ret:
-                #             break
-                #         cv2.imshow("Video Procesado", frame)
-                #         if cv2.waitKey(1) & 0xFF == ord("q"):
-                #             break
-                #     video.release()
-                #     cv2.destroyAllWindows()
-                # else:
-                    # messagebox.showerror("Error", "No se pudo procesar el video")
+                # Recibir video procesado                
+                if data == "[VIDEO-PROCESADO]":
+                    tamaño_video = self.conexion.recv(1024).decode()
+                    tamaño_video = int(tamaño_video)
+                  
+                    # Crear archivo de video
+                    with open("video_procesado.mp4", "wb") as video:
+                        contador = 0
+                      
+                        while contador <= tamaño_video:
+                            datos = self.conexion.recv(1024)
+                            if not datos:
+                                break
+                            video.write(datos)
+                            contador += len(datos)
+                  
+                    # Mostrar mensaje de confirmación
+                    messagebox.showinfo("Procesamiento", "Video procesado con éxito")
+                  
+                    # Reproducir video
+                    video = cv2.VideoCapture("video_procesado.mp4")
+                    while video.isOpened():
+                        ret, frame = video.read()
+                        if not ret:
+                            break
+                        cv2.imshow("Video Procesado", frame)
+                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                            break
+                    video.release()
+                    cv2.destroyAllWindows()
+
             except Exception as e:
                 print("Error al recibir respuesta:", e)
                 break

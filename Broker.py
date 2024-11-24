@@ -74,7 +74,8 @@ class Broker:
             if data == "[UNIR_VIDEO]":
                 result_path = self.video_procesado.get()
                 video_id = result_path.split("/")[1].split("/")[0]
-                self.unir_fragmentos(video_id)
+                final_path = self.unir_fragmentos(video_id)
+                self.devolver_video(conexion, final_path)
             
     def manejador_nodo(self, conexion, address):
         self.nodos.append(conexion) # Agregar nodo a la lista de nodos
@@ -315,8 +316,29 @@ class Broker:
             cap.release()
 
         out.release()
+        return video_salida
         print(f"{BOLD}{LIGHT_PURPLE}[{self.hora_evento()}] [VIDEO-UNIDO]{RESET} - {YELLOW}[VIDEO_ID: {video_id}]{RESET}")
-    pass
+    
+    def devolver_video(self, conexion, video_path):
+        try:
+            print(video_path)
+            conexion.send("[VIDEO-PROCESADO]".encode())  # Enviar mensaje de video procesado
+            tamaño_video = os.path.getsize(video_path)  # Obtener tamaño del video
+            conexion.send(str(tamaño_video).encode())  # Enviar tamaño del video
+            
+            with open(video_path, "rb") as video:
+                contador = 0
+                while contador <= tamaño_video:
+                    datos = video.read(1024)
+                    if not datos or datos == b"[FIN]":
+                        break
+                    conexion.sendall(datos)
+                    contador += len(datos)
+            
+            conexion.send(b"[FIN]")  # Enviar mensaje de finalización            
+        except Exception as e:
+            print(f"Error al enviar el video: {e}")    
+    
 if __name__ == "__main__":
     os.system("cls") # Limpiar consola
     
