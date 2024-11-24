@@ -9,6 +9,7 @@ import time
 import cv2 
 import os
 import errno
+import glob
 class Broker:
     def __init__(self, host, port): # Constructor
         self.host = host
@@ -16,8 +17,12 @@ class Broker:
         self.server = None
         self.nodos = []  # Lista de nodos conectados
         self.cola_fragmentos_listos = Queue()  # Cola para enviar fragmentos de video a los nodos
-        self.hilos = []  # Lista de hilos corriendo
-        self.print_lock = threading.Lock()  # Lock para imprimir mensajes
+        self.cliente = None # Cliente conectado
+        self.evento_mensaje_enviado = threading.Event()
+        self.total_hilos = 0  # Número total de hilos que ejecutarán la tarea
+        self.hilos_activos = 0  # Contador de hilos activos
+        self.lock = threading.Lock()  # Lock para proteger el contador
+        self.video_procesado = Queue()  # Cola para recibir los videos procesados
                 
     def iniciar_servidor(self):
         try:
@@ -37,13 +42,16 @@ class Broker:
                 tipo_conexion = conexion.recv(1024).decode()
 
                 if tipo_conexion == "[CLIENTE]": # Si es un cliente inicia hilo de cliente
+                    self.cliente = conexion
                     threading.Thread(target=self.manejador_cliente, args=(conexion, address), daemon=True).start() # Hilo de clientes
 
                 if tipo_conexion == "[NODO]": # Si es un nodo inicia hilo de nodo
+                    self.total_hilos += 1 
                     threading.Thread(target=self.manejador_nodo, args=(conexion, address),daemon=True).start() # Hilo de nodos
                     
             except Exception as e:
                 print(f"Error aceptando conexiones: {e}")
+                break
     
     def hora_evento(self):
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -62,8 +70,12 @@ class Broker:
             
             if data == "[VIDEO]":
                 self.manejador_video(conexion, address)
-                
-    
+            
+            if data == "[UNIR_VIDEO]":
+                result_path = self.video_procesado.get()
+                video_id = result_path.split("/")[1].split("/")[0]
+                self.unir_fragmentos(video_id)
+            
     def manejador_nodo(self, conexion, address):
         self.nodos.append(conexion) # Agregar nodo a la lista de nodos
         print(f"{BOLD}{BLUE}[{self.hora_evento()}] [CONEXIÓN_NODO]{RESET} - {YELLOW}[DIRECCION : {address}]{RESET}")
@@ -77,16 +89,22 @@ class Broker:
                 break
             
             if data == "[LISTO_PARA_RECIBIR]":
+                with self.lock:
+                    self.hilos_activos += 1 # Añaadir un hilo activo
                 fragmento_path = self.cola_fragmentos_listos.get() # Obtener fragmento de la cola
                 video_id = fragmento_path.split("/")[1]
-                n_segmento = fragmento_path.split("_")[1].split(".")[0]
+                n_segmento = fragmento_path.split("_")[2].split(".")[0]
                 self.enviar_video_nodo(fragmento_path, conexion, n_segmento,video_id)
                 print(f"{LIGHT_PURPLE}[{self.hora_evento()}] [PROCESANDO-VIDEO]{RESET} - [VIDEO_ID: {video_id}]")
                 
             if data == "[VIDEO_PROCESADO]":
-                print("SIUSSSSSSSSSADSADA")
+                self.recibir_video_procesado(conexion,video_id,n_segmento)
                 
-                
+                with self.lock: # Proteger el contador
+                    self.hilos_activos -= 1 # Disminuir el contador de hilos activos
+                    if self.hilos_activos == 0: # Si acabaron todos los hilos
+                        self.cliente.send(b"[UNIR_VIDEO]")
+                                
     def enviar_video_nodo(self,fragmento_path,conexion ,n_segmento,video_id):
         try:
             # Obtener metadata del video
@@ -244,10 +262,61 @@ class Broker:
         hora_evento = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"{BOLD}{LIGHT_PURPLE}[{hora_evento}] [VIDEO-DIVIDIDO]{RESET} - {YELLOW}[CANTIDAD-SEGMENTOS: {cantidad_nodos}]{RESET}")
 
-    def recibir_video_procesado(self,conexion):
-        response = conexion.recv(1024).decode()
-        print(response)
+    def recibir_video_procesado(self,conexion,video_id,segmento):
+        # Armar el path del video procesado
+        video_path = f"Broker_files/{video_id}/Procesado/{segmento}.mp4"
+        
+        # Recibir metadata del video
+        tamaño_video = conexion.recv(1024).decode()
+        tamaño_video = int(tamaño_video)
+        
+        # Recibir video del nodo y almacenarlo en el directorio correspondiente
+        with open(video_path, "wb") as video_file:
+            contador = 0  # Contador de bytes recibidos
 
+            while contador < tamaño_video:
+                
+                datos = conexion.recv(1024)
+                
+                if datos == b"[FIN]" or not datos:
+                    break
+
+                video_file.write(datos)
+                contador += len(datos)
+        self.video_procesado.put(video_path)
+        print(f"{BOLD}{LIGHT_PURPLE}[{self.hora_evento()}] [VIDEO-PROCESADO]{RESET} - {YELLOW}[VIDEO_ID: {video_id}] - {YELLOW}[SEGMENTO: {segmento}]{RESET}")
+
+    def unir_fragmentos(self, video_id):
+        output_dir = f"Broker_files/{video_id}/Procesado"
+        fragmentos = glob.glob(f"Broker_files/{video_id}/Procesado/*.mp4") # Obtener fragmentos
+        video_salida = f"Broker_files/{video_id}/Procesado/Video_Final.mp4"
+
+        if not fragmentos:
+            print(f"{RED}[ERROR] No se encontraron fragmentos para unir.{RESET}")
+            return
+
+        # Obtener propiedades del primer fragmento
+        cap = cv2.VideoCapture(fragmentos[0])
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        # Crear el archivo de video final
+        out = cv2.VideoWriter(video_salida, cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
+
+        for fragmento in fragmentos:
+            cap = cv2.VideoCapture(fragmento)
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                out.write(frame)
+            cap.release()
+
+        out.release()
+        print(f"{BOLD}{LIGHT_PURPLE}[{self.hora_evento()}] [VIDEO-UNIDO]{RESET} - {YELLOW}[VIDEO_ID: {video_id}]{RESET}")
+    pass
 if __name__ == "__main__":
     os.system("cls") # Limpiar consola
     

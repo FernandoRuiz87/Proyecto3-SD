@@ -63,9 +63,63 @@ class Cliente:
 
             # Mostrar mensaje de confirmación
             messagebox.showinfo("Envío", f"Transferencia completa - Tiempo de envío: {round((end_time - start_time),3)} segundos")
+            
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo enviar el video: {e}")
-
+            
+        # Manejar respuesta del broker
+        self.manejar_respuesta()
+    
+    def manejar_respuesta(self):
+        while True:
+            try:
+                data = self.conexion.recv(1024).decode()
+                
+                print(data)
+                
+                if not data:
+                    break
+                
+                if data == "[UNIR_VIDEO]":
+                    
+                    self.conexion.send(b"[UNIR_VIDEO]")  # Confirmar recepción
+                
+                # if data == "[VIDEO-PROCESADO]":
+                #     # Recibir video procesado
+                #     self.conexion.send(b"[OK]")  # Confirmar recepción
+                #     tamaño_video = self.conexion.recv(1024).decode()
+                #     tamaño_video = int(tamaño_video)
+                    
+                #     # Crear archivo de video
+                #     with open("video_procesado.mp4", "wb") as video:
+                #         contador = 0
+                        
+                #         while contador <= tamaño_video:
+                #             datos = self.conexion.recv(1024)
+                #             if not datos:
+                #                 break
+                #             video.write(datos)
+                #             contador += len(datos)
+                    
+                #     # Mostrar mensaje de confirmación
+                #     messagebox.showinfo("Procesamiento", "Video procesado con éxito")
+                    
+                #     # Reproducir video
+                #     video = cv2.VideoCapture("video_procesado.mp4")
+                #     while video.isOpened():
+                #         ret, frame = video.read()
+                #         if not ret:
+                #             break
+                #         cv2.imshow("Video Procesado", frame)
+                #         if cv2.waitKey(1) & 0xFF == ord("q"):
+                #             break
+                #     video.release()
+                #     cv2.destroyAllWindows()
+                # else:
+                    # messagebox.showerror("Error", "No se pudo procesar el video")
+            except Exception as e:
+                print("Error al recibir respuesta:", e)
+                break
 
 class GUI:
     def __init__(self, cliente):  # Modificar constructor para aceptar cliente

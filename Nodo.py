@@ -52,9 +52,9 @@ class Nodo:
                 video_path = self.recibir_video(self.conexion, int(tamaño_video), video_id)
                 out_path = self.procesador.procesar_video(video_path,video_id,self.modificacion, self.conexion)
                 
-                
-                
-                self.conexion.send("[VIDEO_PROCESADO]".encode())
+                if out_path:
+                    self.conexion.send("[VIDEO_PROCESADO]".encode())
+                    self.enviar_video(out_path)
     
     def recibir_datos(self, conexion):
         try:
@@ -95,8 +95,28 @@ class Nodo:
             print(f"{RED}[ERROR AL RECIBIR EL VIDEO] = {YELLOW}{e}{RESET}")
             return False
 
-    def enviar_video(self, conexion, video_path, video_id):
-        pass
+    def enviar_video(self, ruta_video):  # Enviar video al broker
+        try:
+            # Obtener metadata del video
+            tamaño_video = os.path.getsize(ruta_video)  # Obtener tamaño del video
+            
+            self.conexion.send(str(tamaño_video).encode())
+
+            # Enviar video al broker
+            with open(ruta_video, "rb") as video:
+                contador = 0
+
+                while contador <= int(tamaño_video):
+                    datos = video.read(1024)
+                    if not datos:
+                        break
+                    self.conexion.sendall(datos)  # Enviar datos al broker
+                    contador += len(datos)  # Actualizar contador
+
+            self.conexion.send(b"[FIN]")  # Enviar mensaje de finalización
+
+        except Exception as e:
+           print("Error", f"No se pudo enviar el video: {e}")
 class Procesador_video:
     
     def procesar_video(self, ruta_video, video_id, efecto, conexion):
