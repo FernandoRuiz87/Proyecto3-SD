@@ -98,7 +98,7 @@ class Nodo:
         try:
             # Obtener metadata del video
             tamaño_video = os.path.getsize(ruta_video)  # Obtener tamaño del video
-            
+            print(tamaño_video)
             self.conexion.send(str(tamaño_video).encode())
 
             # Enviar video al broker

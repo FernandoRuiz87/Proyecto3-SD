@@ -84,6 +84,8 @@ class Broker:
         while True:
             data = self.recibir_datos(conexion)
             
+            print(data)
+            
             if data is None:
                 self.manejar_desconexion("NODO", address, conexion)
                 break
@@ -94,8 +96,8 @@ class Broker:
                 fragmento_path = self.cola_fragmentos_listos.get() # Obtener fragmento de la cola
                 video_id = fragmento_path.split("/")[1]
                 n_segmento = fragmento_path.split("_")[2].split(".")[0]
-                self.enviar_video_nodo(fragmento_path, conexion, n_segmento,video_id)
                 print(f"{LIGHT_PURPLE}[{self.hora_evento()}] [PROCESANDO-VIDEO]{RESET} - [VIDEO_ID: {video_id}]")
+                self.enviar_video_nodo(fragmento_path, conexion, n_segmento,video_id)
                 
             if data == "[VIDEO_PROCESADO]":
                 self.recibir_video_procesado(conexion,video_id,n_segmento)
@@ -268,6 +270,7 @@ class Broker:
         
         # Recibir metadata del video
         tamaño_video = conexion.recv(1024).decode()
+        print(tamaño_video)
         tamaño_video = int(tamaño_video)
         
         # Recibir video del nodo y almacenarlo en el directorio correspondiente
