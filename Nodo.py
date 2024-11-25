@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 from helpers.Colores import *
 import helpers.env as env
 import cv2 
@@ -98,8 +99,8 @@ class Nodo:
         try:
             # Obtener metadata del video
             tamaño_video = os.path.getsize(ruta_video)  # Obtener tamaño del video
-            print(tamaño_video)
             self.conexion.send(str(tamaño_video).encode())
+            time.sleep(1)
 
             # Enviar video al broker
             with open(ruta_video, "rb") as video:

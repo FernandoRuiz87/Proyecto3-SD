@@ -84,8 +84,6 @@ class Broker:
         while True:
             data = self.recibir_datos(conexion)
             
-            print(data)
-            
             if data is None:
                 self.manejar_desconexion("NODO", address, conexion)
                 break
@@ -270,7 +268,6 @@ class Broker:
         
         # Recibir metadata del video
         tamaño_video = conexion.recv(1024).decode()
-        print(tamaño_video)
         tamaño_video = int(tamaño_video)
         
         # Recibir video del nodo y almacenarlo en el directorio correspondiente
