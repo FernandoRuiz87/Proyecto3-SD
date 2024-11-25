@@ -42,7 +42,6 @@ class Broker:
                 tipo_conexion = conexion.recv(1024).decode()
 
                 if tipo_conexion == "[CLIENTE]": # Si es un cliente inicia hilo de cliente
-                    self.cliente = conexion
                     threading.Thread(target=self.manejador_cliente, args=(conexion, address), daemon=True).start() # Hilo de clientes
 
                 if tipo_conexion == "[NODO]": # Si es un nodo inicia hilo de nodo
@@ -58,7 +57,7 @@ class Broker:
     
     # Proceso de recepcion de video del cliente
     def manejador_cliente(self, conexion, address):
-
+        self.cliente = conexion
         print(f"{BOLD}{GREEN}[{self.hora_evento()}] [CONEXIÓN_CLIENTE]{RESET} - {YELLOW}[DIRECCION : {address}]{RESET}")
         
         while True:

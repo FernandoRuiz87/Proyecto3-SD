@@ -2,7 +2,6 @@ from datetime import datetime
 from helpers.Colores import *
 import helpers.env as env
 import cv2 
-import threading
 import socket
 import os
 import uuid

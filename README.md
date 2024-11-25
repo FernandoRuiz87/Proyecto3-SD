@@ -20,8 +20,9 @@ Este proyecto implementa un sistema distribuido para la transferencia y procesam
 - `os`
 - `time`
 - `datetime`
-  pip install windows-curses
-  pip install PyQt5
+- `windows-curses`
+- `PyQt5`
+- `tkinterdnd2`
 
 ## Instalación de Dependencias
 
