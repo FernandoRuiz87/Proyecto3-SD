@@ -75,12 +75,11 @@ class Cliente:
             try:
                 data = self.conexion.recv(1024).decode()
                 
-                print(data)
-                
                 if not data:
                     break
                 
                 if data == "[UNIR_VIDEO]":
+                    messagebox.showinfo("Procesamiento", "Uniendo video...")
                     self.conexion.send(b"[UNIR_VIDEO]")  # Confirmar recepción
                     
                 # Recibir video procesado                
