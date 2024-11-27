@@ -104,8 +104,8 @@ class Broker:
                     self.hilos_activos -= 1 # Disminuir el contador de hilos activos
                     if self.hilos_activos == 0: # Si acabaron todos los hilos
                         print(f"El nodo {address} ha terminado de procesar el ultimo fragmento")
-                        time.sleep(0.5) # Esperar un poco
                         self.cliente.send("[UNIR_VIDEO]".encode())
+                        time.sleep(0.5) # Esperar un poco
                                 
     def enviar_video_nodo(self,fragmento_path,conexion ,n_segmento,video_id):
         try:

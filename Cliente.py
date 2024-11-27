@@ -33,9 +33,8 @@ class Cliente:
         try:
             # Obtener metadata del video
             tamaño_video = os.path.getsize(ruta_video)  # Obtener tamaño del video
-            
             # Enviar metadata del video
-            self.conexion.send(b"[VIDEO]")
+            self.conexion.send("[VIDEO]".encode())
             data = self.conexion.recv(1024).decode()
 
             if data == "[SIN-NODOS]":
